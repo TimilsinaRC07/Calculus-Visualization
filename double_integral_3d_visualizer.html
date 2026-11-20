@@ -1,0 +1,1011 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Double Integral 3D Visualizer — Volume Under a Surface</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter & JetBrains Mono -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- Three.js & OrbitControls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <!-- KaTeX for crisp math rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js" onload="renderMathInElement(document.body);"></script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            overflow: hidden;
+            background-color: #0b0f19;
+            color: #f8fafc;
+        }
+        .font-mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        /* Custom scrollbar for control panels */
+        ::-webkit-scrollbar {
+            width: 5px;
+            height: 5px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.5);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(99, 102, 241, 0.4);
+            border-radius: 9999px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(99, 102, 241, 0.7);
+        }
+        /* Custom range slider styling */
+        input[type=range] {
+            -webkit-appearance: none;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 15px;
+            width: 15px;
+            border-radius: 50%;
+            background: #6366f1;
+            cursor: pointer;
+            margin-top: -5px;
+            box-shadow: 0 0 8px rgba(99, 102, 241, 0.8);
+            border: 2px solid #ffffff;
+            transition: transform 0.1s ease;
+        }
+        input[type=range]::-webkit-slider-thumb:hover {
+            transform: scale(1.15);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 5px;
+            cursor: pointer;
+            background: #334155;
+            border-radius: 9999px;
+        }
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.82);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border: 1px solid rgba(148, 163, 184, 0.16);
+        }
+    </style>
+</head>
+<body class="w-screen h-screen relative select-none">
+
+    <!-- 3D Canvas Container -->
+    <div id="canvas-container" class="w-full h-full absolute inset-0 z-0"></div>
+
+    <!-- Top Header Bar -->
+    <header class="absolute top-3 left-3 right-3 z-20 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
+        <div class="glass-panel px-4 py-2.5 rounded-2xl shadow-xl pointer-events-auto flex items-center gap-3">
+            <div class="w-9 h-9 rounded-xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-400 font-bold text-lg">
+                ∬
+            </div>
+            <div>
+                <h1 class="text-sm sm:text-base font-bold tracking-tight text-white">Geometric Meaning of the Double Integral</h1>
+                <p class="text-[11px] text-slate-400 hidden sm:block">Volume $V = \iint_R f(x,y)\,dA$ approximated by Riemann prisms</p>
+            </div>
+        </div>
+
+        <!-- Camera & Quick View Controls -->
+        <div class="glass-panel px-3 py-2 rounded-2xl shadow-xl pointer-events-auto flex items-center gap-1.5 text-xs">
+            <button id="btn-reset-cam" class="px-2.5 py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-200 border border-slate-700 transition flex items-center gap-1.5" title="Reset 3D Camera">
+                <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                <span>Reset View</span>
+            </button>
+            <button id="btn-top-view" class="px-2.5 py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-200 border border-slate-700 transition" title="Top-Down XY Grid View">
+                Top ($xy$)
+            </button>
+            <button id="btn-toggle-panels" class="lg:hidden px-2.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition">
+                Controls
+            </button>
+        </div>
+    </header>
+
+    <!-- Left Controls Panel -->
+    <aside id="left-panel" class="absolute top-20 left-3 bottom-3 w-[310px] sm:w-[330px] max-w-[calc(100vw-1.5rem)] z-10 glass-panel rounded-2xl shadow-2xl flex flex-col overflow-hidden transition-transform duration-300">
+        <div class="px-4 py-3 border-b border-slate-700/60 flex items-center justify-between">
+            <span class="text-xs font-semibold uppercase tracking-wider text-indigo-400">Parameters & Controls</span>
+            <span id="preset-equation-badge" class="text-[11px] font-mono bg-indigo-500/15 text-indigo-300 px-2 py-0.5 rounded-lg border border-indigo-500/30">f(x,y)</span>
+        </div>
+
+        <div class="p-4 overflow-y-auto space-y-4 text-xs flex-1">
+            <!-- Surface Function Selector -->
+            <div>
+                <label class="block text-slate-300 font-medium mb-1.5">Surface Function $z = f(x, y)$</label>
+                <select id="func-select" class="w-full bg-slate-800/90 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-indigo-500 transition">
+                    <option value="wave">Smooth Wave: 2.2 + 0.6 sin(x)cos(y) + 0.08(x²+y²)</option>
+                    <option value="paraboloid">Elliptic Paraboloid: 3.8 − 0.22(x² + y²)</option>
+                    <option value="plane">Tilted Plane: 2.0 + 0.35x + 0.25y</option>
+                    <option value="gaussian">Gaussian Bell: 3.6 exp(−0.25(x² + y²)) + 0.4</option>
+                    <option value="saddle">Shifted Saddle: 2.2 + 0.25(x² − y²)</option>
+                </select>
+            </div>
+
+            <!-- Grid Subdivisions m and n -->
+            <div class="bg-slate-800/40 p-3 rounded-xl border border-slate-700/50 space-y-3">
+                <div class="flex items-center justify-between">
+                    <span class="font-semibold text-slate-200">Riemann Grid Subdivisions</span>
+                    <button id="btn-refine-anim" class="text-[11px] px-2 py-0.5 rounded-lg bg-indigo-600/80 hover:bg-indigo-500 text-white transition">
+                        Animate $m,n \to 25$
+                    </button>
+                </div>
+
+                <div>
+                    <div class="flex justify-between mb-1">
+                        <label for="slider-m" class="text-slate-300">$x$-subdivisions ($m$)</label>
+                        <span id="val-m" class="font-mono font-semibold text-indigo-400">6</span>
+                    </div>
+                    <input type="range" id="slider-m" min="2" max="25" value="6" class="w-full">
+                </div>
+
+                <div>
+                    <div class="flex justify-between mb-1">
+                        <label for="slider-n" class="text-slate-300">$y$-subdivisions ($n$)</label>
+                        <span id="val-n" class="font-mono font-semibold text-indigo-400">6</span>
+                    </div>
+                    <input type="range" id="slider-n" min="2" max="25" value="6" class="w-full">
+                </div>
+
+                <div>
+                    <label class="block text-slate-300 mb-1">Sample Point Rule $(x_i^*, y_j^*)$</label>
+                    <div class="grid grid-cols-3 gap-1.5 bg-slate-900/70 p-1 rounded-xl border border-slate-700/60">
+                        <button data-rule="midpoint" class="rule-btn py-1.5 rounded-lg font-medium bg-indigo-600 text-white transition">Midpoint</button>
+                        <button data-rule="lowerleft" class="rule-btn py-1.5 rounded-lg font-medium text-slate-400 hover:text-white transition">Lower-Left</button>
+                        <button data-rule="upperright" class="rule-btn py-1.5 rounded-lg font-medium text-slate-400 hover:text-white transition">Upper-Right</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Region R = [a, b] x [c, d] Bounds -->
+            <div class="bg-slate-800/40 p-3 rounded-xl border border-slate-700/50 space-y-2.5">
+                <div class="flex items-center justify-between">
+                    <span class="font-semibold text-slate-200">Base Region $R = [a, b] \times [c, d]$</span>
+                    <span id="region-dims" class="font-mono text-[11px] text-emerald-400">[-2, 2] × [-2, 2]</span>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <div class="flex justify-between text-[11px] mb-0.5">
+                            <span class="text-slate-400">$a$ ($x_{\min}$)</span>
+                            <span id="val-a" class="font-mono text-slate-200">-2.0</span>
+                        </div>
+                        <input type="range" id="slider-a" min="-3.0" max="0.0" step="0.5" value="-2.0" class="w-full">
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-[11px] mb-0.5">
+                            <span class="text-slate-400">$b$ ($x_{\max}$)</span>
+                            <span id="val-b" class="font-mono text-slate-200">2.0</span>
+                        </div>
+                        <input type="range" id="slider-b" min="0.5" max="3.0" step="0.5" value="2.0" class="w-full">
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-[11px] mb-0.5">
+                            <span class="text-slate-400">$c$ ($y_{\min}$)</span>
+                            <span id="val-c" class="font-mono text-slate-200">-2.0</span>
+                        </div>
+                        <input type="range" id="slider-c" min="-3.0" max="0.0" step="0.5" value="-2.0" class="w-full">
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-[11px] mb-0.5">
+                            <span class="text-slate-400">$d$ ($y_{\max}$)</span>
+                            <span id="val-d" class="font-mono text-slate-200">2.0</span>
+                        </div>
+                        <input type="range" id="slider-d" min="0.5" max="3.0" step="0.5" value="2.0" class="w-full">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Highlighted Column Selector -->
+            <div class="bg-amber-500/10 p-3 rounded-xl border border-amber-500/30 space-y-2">
+                <div class="flex items-center justify-between">
+                    <span class="font-semibold text-amber-300 flex items-center gap-1.5">
+                        <span class="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block"></span>
+                        Representative Column $dV$
+                    </span>
+                    <span id="highlight-coords" class="font-mono text-[11px] text-amber-200">(i=3, j=3)</span>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <div class="flex justify-between text-[11px] mb-0.5">
+                            <span class="text-amber-200/80">Index $i$ ($x$)</span>
+                            <span id="val-hi" class="font-mono text-amber-300">3</span>
+                        </div>
+                        <input type="range" id="slider-hi" min="1" max="6" value="3" class="w-full">
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-[11px] mb-0.5">
+                            <span class="text-amber-200/80">Index $j$ ($y$)</span>
+                            <span id="val-hj" class="font-mono text-amber-300">3</span>
+                        </div>
+                        <input type="range" id="slider-hj" min="1" max="6" value="3" class="w-full">
+                    </div>
+                </div>
+                <div id="highlight-readout" class="text-[11px] font-mono text-amber-200/90 pt-1 border-t border-amber-500/20 flex justify-between">
+                    <span>f(x*,y*) = 2.45</span>
+                    <span>dV = 1.09</span>
+                </div>
+            </div>
+
+            <!-- Visibility Toggles -->
+            <div class="space-y-2">
+                <span class="block font-semibold text-slate-300">Visual Layers</span>
+                <div class="grid grid-cols-2 gap-2">
+                    <label class="flex items-center gap-2 bg-slate-800/60 px-2.5 py-2 rounded-xl border border-slate-700/60 cursor-pointer hover:bg-slate-800">
+                        <input type="checkbox" id="toggle-surface" checked class="accent-indigo-500 w-3.5 h-3.5 rounded">
+                        <span class="text-slate-200">Smooth Surface</span>
+                    </label>
+                    <label class="flex items-center gap-2 bg-slate-800/60 px-2.5 py-2 rounded-xl border border-slate-700/60 cursor-pointer hover:bg-slate-800">
+                        <input type="checkbox" id="toggle-columns" checked class="accent-indigo-500 w-3.5 h-3.5 rounded">
+                        <span class="text-slate-200">Riemann Prisms</span>
+                    </label>
+                    <label class="flex items-center gap-2 bg-slate-800/60 px-2.5 py-2 rounded-xl border border-slate-700/60 cursor-pointer hover:bg-slate-800">
+                        <input type="checkbox" id="toggle-wireframe" checked class="accent-indigo-500 w-3.5 h-3.5 rounded">
+                        <span class="text-slate-200">Surface Mesh</span>
+                    </label>
+                    <label class="flex items-center gap-2 bg-slate-800/60 px-2.5 py-2 rounded-xl border border-slate-700/60 cursor-pointer hover:bg-slate-800">
+                        <input type="checkbox" id="toggle-highlight" checked class="accent-amber-500 w-3.5 h-3.5 rounded">
+                        <span class="text-amber-300">Highlight $dV$</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Right Mathematical Breakdown & Step-by-Step Guide Panel -->
+    <aside id="right-panel" class="hidden lg:flex absolute top-20 right-3 bottom-3 w-[340px] z-10 glass-panel rounded-2xl shadow-2xl flex-col overflow-hidden">
+        <!-- Tabs -->
+        <div class="grid grid-cols-2 border-b border-slate-700/60 text-xs font-semibold">
+            <button id="tab-math" class="py-3 text-indigo-400 border-b-2 border-indigo-500 bg-indigo-500/5 transition">
+                Live Calculation
+            </button>
+            <button id="tab-guide" class="py-3 text-slate-400 hover:text-slate-200 transition">
+                Step-by-Step Concept
+            </button>
+        </div>
+
+        <!-- Tab 1: Live Mathematical Breakdown -->
+        <div id="content-math" class="p-4 overflow-y-auto space-y-4 text-xs flex-1">
+            <!-- Formula Card -->
+            <div class="bg-slate-900/80 p-3.5 rounded-xl border border-indigo-500/30 text-center">
+                <div class="text-[11px] uppercase tracking-wider text-indigo-400 font-semibold mb-1.5">Double Riemann Sum</div>
+                <div class="text-sm text-slate-100 py-1">
+                    $$V \approx \sum_{i=1}^{m} \sum_{j=1}^{n} f(x_i^*, y_j^*) \, \Delta x \, \Delta y$$
+                </div>
+            </div>
+
+            <!-- Cell Dimensions -->
+            <div class="grid grid-cols-3 gap-2">
+                <div class="bg-slate-800/60 p-2.5 rounded-xl border border-slate-700/60">
+                    <div class="text-[10px] text-slate-400">Width ($\Delta x$)</div>
+                    <div id="stat-dx" class="font-mono font-semibold text-sm text-sky-400 mt-0.5">0.667</div>
+                </div>
+                <div class="bg-slate-800/60 p-2.5 rounded-xl border border-slate-700/60">
+                    <div class="text-[10px] text-slate-400">Depth ($\Delta y$)</div>
+                    <div id="stat-dy" class="font-mono font-semibold text-sm text-sky-400 mt-0.5">0.667</div>
+                </div>
+                <div class="bg-slate-800/60 p-2.5 rounded-xl border border-slate-700/60">
+                    <div class="text-[10px] text-slate-400">Base ($\Delta A$)</div>
+                    <div id="stat-da" class="font-mono font-semibold text-sm text-emerald-400 mt-0.5">0.444</div>
+                </div>
+            </div>
+
+            <!-- Volume Comparison Metrics -->
+            <div class="space-y-2.5 bg-slate-800/40 p-3.5 rounded-xl border border-slate-700/60">
+                <div class="flex justify-between items-center pb-2 border-b border-slate-700/60">
+                    <span class="text-slate-300">Riemann Sum ($m \times n = <span id="stat-cells">36</span>$)</span>
+                    <span id="stat-riemann" class="font-mono font-bold text-base text-indigo-400">0.0000</span>
+                </div>
+                <div class="flex justify-between items-center pb-2 border-b border-slate-700/60">
+                    <span class="text-slate-300">Exact Volume $\iint_R f\,dA$</span>
+                    <span id="stat-exact" class="font-mono font-bold text-base text-emerald-400">0.0000</span>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-slate-400">Approximation Error $|V - V_n|$</span>
+                    <span id="stat-error" class="font-mono font-medium text-rose-400">0.0000 (0.0%)</span>
+                </div>
+
+                <!-- Convergence Visual Bar -->
+                <div class="pt-1">
+                    <div class="flex justify-between text-[10px] text-slate-400 mb-1">
+                        <span>Accuracy Convergence</span>
+                        <span id="stat-accuracy">98.5%</span>
+                    </div>
+                    <div class="w-full h-2 bg-slate-900 rounded-full overflow-hidden">
+                        <div id="accuracy-bar" class="h-full bg-gradient-to-r from-indigo-500 to-emerald-400 transition-all duration-200" style="width: 95%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Highlighted Prism Breakdown -->
+            <div class="bg-amber-500/10 p-3.5 rounded-xl border border-amber-500/30 space-y-1.5">
+                <div class="font-semibold text-amber-300 flex items-center justify-between">
+                    <span>Single Volume Element ($dV$)</span>
+                    <span class="font-mono text-[11px] bg-amber-500/20 px-1.5 py-0.5 rounded">Gold Prism</span>
+                </div>
+                <p class="text-[11px] text-slate-300 leading-relaxed">
+                    The highlighted column has base area <span class="font-mono text-emerald-300">$\Delta A = \Delta x \cdot \Delta y$</span> on the $xy$-plane and rises to height <span class="font-mono text-amber-300">$z = f(x_i^*, y_j^*)$</span>:
+                </p>
+                <div id="dv-formula-box" class="font-mono text-[11px] bg-slate-950/60 p-2 rounded-lg text-amber-200 border border-amber-500/20">
+                    dV = f(0.33, 0.33) · 0.444 = 1.089
+                </div>
+            </div>
+
+            <!-- Interactive Mouse Hint -->
+            <div class="text-[11px] text-slate-400 bg-slate-900/50 p-2.5 rounded-xl border border-slate-800 flex items-center gap-2">
+                <span class="text-indigo-400 text-base">🖱️</span>
+                <span>Drag to orbit • Scroll to zoom • Right-drag to pan • Increase $m, n$ to see prisms converge to the smooth surface.</span>
+            </div>
+        </div>
+
+        <!-- Tab 2: Step-by-Step Geometric Explanation -->
+        <div id="content-guide" class="hidden p-4 overflow-y-auto space-y-3 text-xs flex-1">
+            <div class="bg-slate-800/50 p-3 rounded-xl border border-slate-700/60 space-y-1.5">
+                <div class="flex items-center gap-2 font-semibold text-emerald-400">
+                    <span class="w-5 h-5 rounded-full bg-emerald-500/20 flex items-center justify-center text-[11px]">1</span>
+                    <span>Base Region $R$ & Area Element $dA$</span>
+                </div>
+                <p class="text-slate-300 leading-relaxed">
+                    We partition the rectangular domain $R = [a, b] \times [c, d]$ on the $xy$-plane into $m \times n$ tiny sub-rectangles. Each grid cell has width $\Delta x = \frac{b-a}{m}$, depth $\Delta y = \frac{d-c}{n}$, and area:
+                </p>
+                <div class="bg-slate-900/70 p-2 rounded-lg text-center text-emerald-300">
+                    $$\Delta A = \Delta x \cdot \Delta y \;\longrightarrow\; dA = dx\,dy$$
+                </div>
+            </div>
+
+            <div class="bg-slate-800/50 p-3 rounded-xl border border-slate-700/60 space-y-1.5">
+                <div class="flex items-center gap-2 font-semibold text-sky-400">
+                    <span class="w-5 h-5 rounded-full bg-sky-500/20 flex items-center justify-center text-[11px]">2</span>
+                    <span>Height $z = f(x_i^*, y_j^*)$</span>
+                </div>
+                <p class="text-slate-300 leading-relaxed">
+                    Inside each sub-rectangle $R_{ij}$, we pick a sample point $(x_i^*, y_j^*)$ and evaluate the surface height $z = f(x_i^*, y_j^*)$ directly above the $xy$-plane.
+                </p>
+            </div>
+
+            <div class="bg-slate-800/50 p-3 rounded-xl border border-slate-700/60 space-y-1.5">
+                <div class="flex items-center gap-2 font-semibold text-amber-400">
+                    <span class="w-5 h-5 rounded-full bg-amber-500/20 flex items-center justify-center text-[11px]">3</span>
+                    <span>Volume of One Prism ($dV$)</span>
+                </div>
+                <p class="text-slate-300 leading-relaxed">
+                    A thin rectangular column (shown in <span class="text-amber-300 font-semibold">gold</span>) standing on base $\Delta A$ with height $f(x_i^*, y_j^*)$ has volume:
+                </p>
+                <div class="bg-slate-900/70 p-2 rounded-lg text-center text-amber-300">
+                    $$\Delta V_{ij} = f(x_i^*, y_j^*) \, \Delta x \, \Delta y \;\longrightarrow\; dV = f(x,y)\,dA$$
+                </div>
+            </div>
+
+            <div class="bg-slate-800/50 p-3 rounded-xl border border-slate-700/60 space-y-1.5">
+                <div class="flex items-center gap-2 font-semibold text-indigo-400">
+                    <span class="w-5 h-5 rounded-full bg-indigo-500/20 flex items-center justify-center text-[11px]">4</span>
+                    <span>Summing & Taking the Limit</span>
+                </div>
+                <p class="text-slate-300 leading-relaxed">
+                    Adding all $m \times n$ prisms approximates the total volume. As $m, n \to \infty$, the stepped columns merge into the exact smooth volume under $z = f(x, y)$:
+                </p>
+                <div class="bg-slate-900/70 p-2 rounded-lg text-center text-indigo-300">
+                    $$V = \lim_{m,n \to \infty} \sum_{i=1}^{m}\sum_{j=1}^{n} f(x_i^*, y_j^*)\,\Delta A = \iint_R f(x,y)\,dA$$
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Bottom Legend Pill (Mobile & Desktop) -->
+    <div class="hidden sm:flex fixed bottom-3 left-1/2 -translate-x-1/2 z-10 glass-panel px-4 py-1.5 rounded-full text-[11px] text-slate-300 items-center gap-4 shadow-lg pointer-events-none">
+        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-indigo-400/80 inline-block"></span> Surface $z = f(x,y)$</span>
+        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-sky-400/80 inline-block"></span> Riemann Prisms</span>
+        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-amber-400 inline-block"></span> Element $dV = f(x,y)\,dA$</span>
+        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-emerald-400 inline-block"></span> Region $R$ ($z=0$)</span>
+    </div>
+
+    <script>
+        /**
+         * Double Integral 3D Visualizer
+         * Coordinate mapping note:
+         * Math coordinates: (x, y) in horizontal plane, z vertical height.
+         * Three.js coordinates: X = math x, Y = math z (up), Z = -math y (so right-hand rule holds cleanly).
+         */
+        window.onload = function () {
+            // --- 1. Application State ---
+            const state = {
+                funcKey: 'wave',
+                m: 6,
+                n: 6,
+                rule: 'midpoint', // 'midpoint' | 'lowerleft' | 'upperright'
+                a: -2.0,
+                b: 2.0,
+                c: -2.0,
+                d: 2.0,
+                highlightI: 3, // 1-indexed
+                highlightJ: 3, // 1-indexed
+                showSurface: true,
+                showColumns: true,
+                showWireframe: true,
+                showHighlight: true,
+                animatingRefine: false
+            };
+
+            // Mathematical surface presets
+            const functions = {
+                wave: {
+                    label: '2.2 + 0.6 sin(x)cos(y) + 0.08(x² + y²)',
+                    fn: (x, y) => 2.2 + 0.6 * Math.sin(x) * Math.cos(y) + 0.08 * (x * x + y * y)
+                },
+                paraboloid: {
+                    label: '3.8 − 0.22(x² + y²)',
+                    fn: (x, y) => Math.max(0.15, 3.8 - 0.22 * (x * x + y * y))
+                },
+                plane: {
+                    label: '2.0 + 0.35x + 0.25y',
+                    fn: (x, y) => Math.max(0.1, 2.0 + 0.35 * x + 0.25 * y)
+                },
+                gaussian: {
+                    label: '3.6 exp(−0.25(x² + y²)) + 0.4',
+                    fn: (x, y) => 3.6 * Math.exp(-0.25 * (x * x + y * y)) + 0.4
+                },
+                saddle: {
+                    label: '2.2 + 0.25(x² − y²)',
+                    fn: (x, y) => Math.max(0.1, 2.2 + 0.25 * (x * x - y * y))
+                }
+            };
+
+            // --- 2. Three.js Scene Setup ---
+            const container = document.getElementById('canvas-container');
+            const scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0b0f19);
+            scene.fog = new THREE.FogExp2(0x0b0f19, 0.032);
+
+            const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+            const defaultCamPos = new THREE.Vector3(6.8, 5.8, 7.2);
+            camera.position.copy(defaultCamPos);
+
+            const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            container.appendChild(renderer.domElement);
+
+            const controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.06;
+            controls.target.set(0, 1.4, 0);
+            controls.maxDistance = 25;
+            controls.minDistance = 3;
+
+            // --- 3. Lighting ---
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.65);
+            scene.add(ambientLight);
+
+            const dirLight1 = new THREE.DirectionalLight(0xffffff, 0.85);
+            dirLight1.position.set(8, 14, 10);
+            scene.add(dirLight1);
+
+            const dirLight2 = new THREE.DirectionalLight(0x818cf8, 0.45);
+            dirLight2.position.set(-10, 6, -8);
+            scene.add(dirLight2);
+
+            // --- 4. Coordinate Axes, Grid & Labels ---
+            const gridHelper = new THREE.GridHelper(10, 10, 0x334155, 0x1e293b);
+            scene.add(gridHelper);
+
+            // Custom clean axes lines (X = red/rose, Y = emerald, Z = sky)
+            function buildAxes() {
+                const axesGroup = new THREE.Group();
+                const axisLen = 4.6;
+
+                const createAxis = (dir, color) => {
+                    const mat = new THREE.LineBasicMaterial({ color, linewidth: 2 });
+                    const pts = [new THREE.Vector3(0, 0, 0), dir.clone().multiplyScalar(axisLen)];
+                    const geom = new THREE.BufferGeometry().setFromPoints(pts);
+                    axesGroup.add(new THREE.Line(geom, mat));
+
+                    // Arrow cone
+                    const coneGeom = new THREE.ConeGeometry(0.08, 0.24, 16);
+                    const coneMat = new THREE.MeshBasicMaterial({ color });
+                    const cone = new THREE.Mesh(coneGeom, coneMat);
+                    cone.position.copy(dir.clone().multiplyScalar(axisLen));
+                    cone.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
+                    axesGroup.add(cone);
+                };
+
+                // Math X -> Three +X
+                createAxis(new THREE.Vector3(1, 0, 0), 0xf43f5e);
+                // Math Y -> Three -Z
+                createAxis(new THREE.Vector3(0, 0, -1), 0x10b981);
+                // Math Z -> Three +Y
+                createAxis(new THREE.Vector3(0, 1, 0), 0x38bdf8);
+
+                // Text sprites for X, Y, Z
+                const makeLabel = (text, color, pos) => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 128;
+                    canvas.height = 128;
+                    const ctx = canvas.getContext('2d');
+                    ctx.font = 'bold 64px Inter, sans-serif';
+                    ctx.fillStyle = color;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(text, 64, 64);
+
+                    const tex = new THREE.CanvasTexture(canvas);
+                    const spriteMat = new THREE.SpriteMaterial({ map: tex, transparent: true });
+                    const sprite = new THREE.Sprite(spriteMat);
+                    sprite.position.copy(pos);
+                    sprite.scale.set(0.65, 0.65, 0.65);
+                    axesGroup.add(sprite);
+                };
+
+                makeLabel('x', '#fb7185', new THREE.Vector3(4.95, 0.15, 0));
+                makeLabel('y', '#34d399', new THREE.Vector3(0, 0.15, -4.95));
+                makeLabel('z', '#7dd3fc', new THREE.Vector3(0, 4.95, 0));
+
+                return axesGroup;
+            }
+            scene.add(buildAxes());
+
+            // Dynamic Geometry Groups
+            const dynamicGroup = new THREE.Group();
+            scene.add(dynamicGroup);
+
+            // --- 5. Numerical Exact Integration (2D Simpson's Rule) ---
+            function computeExactIntegral(fn, a, b, c, d) {
+                const N = 60; // even number of intervals for Simpson's rule
+                const hx = (b - a) / N;
+                const hy = (d - c) / N;
+                let total = 0;
+
+                for (let i = 0; i <= N; i++) {
+                    const wx = (i === 0 || i === N) ? 1 : (i % 2 === 1 ? 4 : 2);
+                    const x = a + i * hx;
+                    for (let j = 0; j <= N; j++) {
+                        const wy = (j === 0 || j === N) ? 1 : (j % 2 === 1 ? 4 : 2);
+                        const y = c + j * hy;
+                        total += wx * wy * fn(x, y);
+                    }
+                }
+                return (hx * hy / 9) * total;
+            }
+
+            // --- 6. Build & Update 3D Visualization ---
+            function rebuildVisualization() {
+                // Dispose previous geometries & materials cleanly
+                while (dynamicGroup.children.length > 0) {
+                    const child = dynamicGroup.children[0];
+                    if (child.geometry) child.geometry.dispose();
+                    if (child.material) {
+                        if (Array.isArray(child.material)) child.material.forEach(m => m.dispose());
+                        else child.material.dispose();
+                    }
+                    dynamicGroup.remove(child);
+                }
+
+                const { funcKey, m, n, rule, a, b, c, d } = state;
+                const fn = functions[funcKey].fn;
+
+                // Clamp highlight indices to valid range
+                state.highlightI = Math.min(Math.max(1, state.highlightI), m);
+                state.highlightJ = Math.min(Math.max(1, state.highlightJ), n);
+
+                const dx = (b - a) / m;
+                const dy = (d - c) / n;
+                const dA = dx * dy;
+
+                // A. Highlighted Base Region R on z = 0 plane
+                const regionWidth = b - a;
+                const regionDepth = d - c;
+                const centerX = (a + b) / 2;
+                const centerY = (c + d) / 2;
+
+                const baseGeom = new THREE.PlaneGeometry(regionWidth, regionDepth);
+                baseGeom.rotateX(-Math.PI / 2);
+                const baseMat = new THREE.MeshBasicMaterial({
+                    color: 0x10b981,
+                    transparent: true,
+                    opacity: 0.16,
+                    side: THREE.DoubleSide,
+                    depthWrite: false
+                });
+                const baseMesh = new THREE.Mesh(baseGeom, baseMat);
+                baseMesh.position.set(centerX, 0.005, -centerY);
+                dynamicGroup.add(baseMesh);
+
+                // Border around Base Region R
+                const borderPts = [
+                    new THREE.Vector3(a, 0.01, -c),
+                    new THREE.Vector3(b, 0.01, -c),
+                    new THREE.Vector3(b, 0.01, -d),
+                    new THREE.Vector3(a, 0.01, -d),
+                    new THREE.Vector3(a, 0.01, -c)
+                ];
+                const borderGeom = new THREE.BufferGeometry().setFromPoints(borderPts);
+                const borderMat = new THREE.LineBasicMaterial({ color: 0x34d399 });
+                dynamicGroup.add(new THREE.Line(borderGeom, borderMat));
+
+                // B. Riemann Prisms (Columns) & Highlighted dV Column
+                let riemannSum = 0;
+                let highlightInfo = { xStar: 0, yStar: 0, h: 0, dV: 0 };
+
+                // Shared unit box geometry scaled per column for performance
+                const unitBoxGeom = new THREE.BoxGeometry(1, 1, 1);
+                const edgesGeom = new THREE.EdgesGeometry(unitBoxGeom);
+
+                const colMat = new THREE.MeshPhongMaterial({
+                    color: 0x38bdf8,
+                    transparent: true,
+                    opacity: state.showSurface ? 0.52 : 0.85,
+                    shininess: 60
+                });
+                const colEdgeMat = new THREE.LineBasicMaterial({
+                    color: 0x0284c7,
+                    transparent: true,
+                    opacity: 0.55
+                });
+
+                const hlMat = new THREE.MeshPhongMaterial({
+                    color: 0xf59e0b,
+                    emissive: 0xb45309,
+                    emissiveIntensity: 0.35,
+                    transparent: true,
+                    opacity: 0.92,
+                    shininess: 90
+                });
+                const hlEdgeMat = new THREE.LineBasicMaterial({
+                    color: 0xfef08a
+                });
+
+                for (let i = 0; i < m; i++) {
+                    const x0 = a + i * dx;
+                    const x1 = x0 + dx;
+                    const xMid = (x0 + x1) / 2;
+
+                    for (let j = 0; j < n; j++) {
+                        const y0 = c + j * dy;
+                        const y1 = y0 + dy;
+                        const yMid = (y0 + y1) / 2;
+
+                        // Sample point according to selected rule
+                        let xStar = xMid;
+                        let yStar = yMid;
+                        if (rule === 'lowerleft') {
+                            xStar = x0;
+                            yStar = y0;
+                        } else if (rule === 'upperright') {
+                            xStar = x1;
+                            yStar = y1;
+                        }
+
+                        const height = Math.max(0.01, fn(xStar, yStar));
+                        const cellVol = height * dA;
+                        riemannSum += cellVol;
+
+                        const isHighlighted = (i + 1 === state.highlightI) && (j + 1 === state.highlightJ);
+                        if (isHighlighted) {
+                            highlightInfo = { xStar, yStar, h: height, dV: cellVol };
+                        }
+
+                        if ((state.showColumns && !isHighlighted) || (isHighlighted && state.showHighlight)) {
+                            const shrink = isHighlighted ? 0.985 : 0.95;
+                            const mesh = new THREE.Mesh(unitBoxGeom, isHighlighted ? hlMat : colMat);
+                            mesh.scale.set(dx * shrink, height, dy * shrink);
+                            mesh.position.set(xMid, height / 2, -yMid);
+                            dynamicGroup.add(mesh);
+
+                            const wire = new THREE.LineSegments(edgesGeom, isHighlighted ? hlEdgeMat : colEdgeMat);
+                            wire.scale.copy(mesh.scale);
+                            wire.position.copy(mesh.position);
+                            dynamicGroup.add(wire);
+                        }
+
+                        // Sample point dot on top of highlighted prism
+                        if (isHighlighted && state.showHighlight) {
+                            const dotGeom = new THREE.SphereGeometry(0.065, 16, 16);
+                            const dotMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+                            const dot = new THREE.Mesh(dotGeom, dotMat);
+                            dot.position.set(xStar, height + 0.02, -yStar);
+                            dynamicGroup.add(dot);
+                        }
+                    }
+                }
+
+                // C. Smooth Translucent Surface z = f(x, y) over R
+                if (state.showSurface || state.showWireframe) {
+                    const segX = 48;
+                    const segY = 48;
+                    const surfGeom = new THREE.PlaneGeometry(regionWidth, regionDepth, segX, segY);
+                    surfGeom.rotateX(-Math.PI / 2);
+
+                    const posAttr = surfGeom.attributes.position;
+                    const colors = [];
+                    let minZ = Infinity, maxZ = -Infinity;
+
+                    // First pass: set heights & find z-range for color gradient
+                    for (let k = 0; k < posAttr.count; k++) {
+                        const vx = posAttr.getX(k) + centerX;
+                        const vzThree = posAttr.getZ(k) - centerY;
+                        const mathY = -vzThree;
+                        const mathZ = fn(vx, mathY);
+
+                        posAttr.setXYZ(k, vx, mathZ, vzThree);
+                        if (mathZ < minZ) minZ = mathZ;
+                        if (mathZ > maxZ) maxZ = mathZ;
+                    }
+
+                    // Second pass: height-mapped vertex coloring (indigo -> violet -> rose/pink)
+                    const colorLow = new THREE.Color(0x6366f1);
+                    const colorMid = new THREE.Color(0xa855f7);
+                    const colorHigh = new THREE.Color(0xec4899);
+                    const span = Math.max(0.001, maxZ - minZ);
+
+                    for (let k = 0; k < posAttr.count; k++) {
+                        const h = posAttr.getY(k);
+                        const t = (h - minZ) / span;
+                        const cOut = new THREE.Color();
+                        if (t < 0.5) {
+                            cOut.lerpColors(colorLow, colorMid, t * 2);
+                        } else {
+                            cOut.lerpColors(colorMid, colorHigh, (t - 0.5) * 2);
+                        }
+                        colors.push(cOut.r, cOut.g, cOut.b);
+                    }
+
+                    surfGeom.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+                    surfGeom.computeVertexNormals();
+
+                    if (state.showSurface) {
+                        const surfMat = new THREE.MeshPhongMaterial({
+                            vertexColors: true,
+                            transparent: true,
+                            opacity: state.showColumns ? 0.48 : 0.86,
+                            side: THREE.DoubleSide,
+                            shininess: 80,
+                            depthWrite: !state.showColumns
+                        });
+                        dynamicGroup.add(new THREE.Mesh(surfGeom, surfMat));
+                    }
+
+                    if (state.showWireframe) {
+                        // Subtle contour grid lines on the surface
+                        const wireStep = 4;
+                        const lineMat = new THREE.LineBasicMaterial({
+                            color: 0xe0e7ff,
+                            transparent: true,
+                            opacity: 0.25
+                        });
+
+                        for (let ix = 0; ix <= segX; ix += wireStep) {
+                            const pts = [];
+                            for (let iy = 0; iy <= segY; iy++) {
+                                const idx = iy * (segX + 1) + ix;
+                                pts.push(new THREE.Vector3(posAttr.getX(idx), posAttr.getY(idx) + 0.004, posAttr.getZ(idx)));
+                            }
+                            dynamicGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), lineMat));
+                        }
+                        for (let iy = 0; iy <= segY; iy += wireStep) {
+                            const pts = [];
+                            for (let ix = 0; ix <= segX; ix++) {
+                                const idx = iy * (segX + 1) + ix;
+                                pts.push(new THREE.Vector3(posAttr.getX(idx), posAttr.getY(idx) + 0.004, posAttr.getZ(idx)));
+                            }
+                            dynamicGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), lineMat));
+                        }
+                    }
+                }
+
+                // --- 7. Update UI Readouts ---
+                const exactVol = computeExactIntegral(fn, a, b, c, d);
+                const absError = Math.abs(exactVol - riemannSum);
+                const relErrorPct = exactVol > 0 ? (absError / exactVol) * 100 : 0;
+                const accuracyPct = Math.max(0, Math.min(100, 100 - relErrorPct));
+
+                document.getElementById('stat-dx').textContent = dx.toFixed(3);
+                document.getElementById('stat-dy').textContent = dy.toFixed(3);
+                document.getElementById('stat-da').textContent = dA.toFixed(3);
+                document.getElementById('stat-cells').textContent = (m * n).toString();
+                document.getElementById('stat-riemann').textContent = riemannSum.toFixed(4);
+                document.getElementById('stat-exact').textContent = exactVol.toFixed(4);
+                document.getElementById('stat-error').textContent = `${absError.toFixed(4)} (${relErrorPct.toFixed(2)}%)`;
+                document.getElementById('stat-accuracy').textContent = `${accuracyPct.toFixed(1)}%`;
+                document.getElementById('accuracy-bar').style.width = `${accuracyPct}%`;
+
+                document.getElementById('highlight-coords').textContent = `(i=${state.highlightI}, j=${state.highlightJ})`;
+                document.getElementById('highlight-readout').innerHTML =
+                    `<span>f(${highlightInfo.xStar.toFixed(2)}, ${highlightInfo.yStar.toFixed(2)}) = ${highlightInfo.h.toFixed(2)}</span>` +
+                    `<span>dV = ${highlightInfo.dV.toFixed(3)}</span>`;
+                document.getElementById('dv-formula-box').textContent =
+                    `dV = f(${highlightInfo.xStar.toFixed(2)}, ${highlightInfo.yStar.toFixed(2)}) · ${dA.toFixed(3)} = ${highlightInfo.dV.toFixed(4)}`;
+            }
+
+            // --- 8. UI Event Listeners ---
+            const funcSelect = document.getElementById('func-select');
+            const sliderM = document.getElementById('slider-m');
+            const sliderN = document.getElementById('slider-n');
+            const sliderA = document.getElementById('slider-a');
+            const sliderB = document.getElementById('slider-b');
+            const sliderC = document.getElementById('slider-c');
+            const sliderD = document.getElementById('slider-d');
+            const sliderHi = document.getElementById('slider-hi');
+            const sliderHj = document.getElementById('slider-hj');
+
+            funcSelect.addEventListener('change', (e) => {
+                state.funcKey = e.target.value;
+                rebuildVisualization();
+            });
+
+            function syncSubdivisionUI() {
+                document.getElementById('val-m').textContent = state.m;
+                document.getElementById('val-n').textContent = state.n;
+                sliderHi.max = state.m;
+                sliderHj.max = state.n;
+                if (state.highlightI > state.m) state.highlightI = state.m;
+                if (state.highlightJ > state.n) state.highlightJ = state.n;
+                sliderHi.value = state.highlightI;
+                sliderHj.value = state.highlightJ;
+                document.getElementById('val-hi').textContent = state.highlightI;
+                document.getElementById('val-hj').textContent = state.highlightJ;
+            }
+
+            sliderM.addEventListener('input', (e) => {
+                state.m = parseInt(e.target.value, 10);
+                syncSubdivisionUI();
+                rebuildVisualization();
+            });
+
+            sliderN.addEventListener('input', (e) => {
+                state.n = parseInt(e.target.value, 10);
+                syncSubdivisionUI();
+                rebuildVisualization();
+            });
+
+            sliderHi.addEventListener('input', (e) => {
+                state.highlightI = parseInt(e.target.value, 10);
+                document.getElementById('val-hi').textContent = state.highlightI;
+                rebuildVisualization();
+            });
+
+            sliderHj.addEventListener('input', (e) => {
+                state.highlightJ = parseInt(e.target.value, 10);
+                document.getElementById('val-hj').textContent = state.highlightJ;
+                rebuildVisualization();
+            });
+
+            // Sample rule buttons
+            document.querySelectorAll('.rule-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.rule-btn').forEach(b => {
+                        b.classList.remove('bg-indigo-600', 'text-white');
+                        b.classList.add('text-slate-400');
+                    });
+                    btn.classList.add('bg-indigo-600', 'text-white');
+                    btn.classList.remove('text-slate-400');
+                    state.rule = btn.dataset.rule;
+                    rebuildVisualization();
+                });
+            });
+
+            // Region bounds sliders
+            function updateBounds() {
+                state.a = parseFloat(sliderA.value);
+                state.b = parseFloat(sliderB.value);
+                state.c = parseFloat(sliderC.value);
+                state.d = parseFloat(sliderD.value);
+
+                document.getElementById('val-a').textContent = state.a.toFixed(1);
+                document.getElementById('val-b').textContent = state.b.toFixed(1);
+                document.getElementById('val-c').textContent = state.c.toFixed(1);
+                document.getElementById('val-d').textContent = state.d.toFixed(1);
+                document.getElementById('region-dims').textContent =
+                    `[${state.a.toFixed(1)}, ${state.b.toFixed(1)}] × [${state.c.toFixed(1)}, ${state.d.toFixed(1)}]`;
+                rebuildVisualization();
+            }
+            [sliderA, sliderB, sliderC, sliderD].forEach(s => s.addEventListener('input', updateBounds));
+
+            // Layer toggles
+            document.getElementById('toggle-surface').addEventListener('change', (e) => {
+                state.showSurface = e.target.checked;
+                rebuildVisualization();
+            });
+            document.getElementById('toggle-columns').addEventListener('change', (e) => {
+                state.showColumns = e.target.checked;
+                rebuildVisualization();
+            });
+            document.getElementById('toggle-wireframe').addEventListener('change', (e) => {
+                state.showWireframe = e.target.checked;
+                rebuildVisualization();
+            });
+            document.getElementById('toggle-highlight').addEventListener('change', (e) => {
+                state.showHighlight = e.target.checked;
+                rebuildVisualization();
+            });
+
+            // Animate m, n -> 25 convergence button
+            document.getElementById('btn-refine-anim').addEventListener('click', () => {
+                if (state.animatingRefine) return;
+                state.animatingRefine = true;
+                state.m = 2;
+                state.n = 2;
+                sliderM.value = 2;
+                sliderN.value = 2;
+                syncSubdivisionUI();
+                rebuildVisualization();
+
+                const interval = setInterval(() => {
+                    if (state.m >= 25 && state.n >= 25) {
+                        clearInterval(interval);
+                        state.animatingRefine = false;
+                        return;
+                    }
+                    state.m = Math.min(25, state.m + 1);
+                    state.n = Math.min(25, state.n + 1);
+                    sliderM.value = state.m;
+                    sliderN.value = state.n;
+                    syncSubdivisionUI();
+                    rebuildVisualization();
+                }, 90);
+            });
+
+            // Camera Preset Buttons
+            document.getElementById('btn-reset-cam').addEventListener('click', () => {
+                camera.position.copy(defaultCamPos);
+                controls.target.set(0, 1.4, 0);
+                controls.update();
+            });
+
+            document.getElementById('btn-top-view').addEventListener('click', () => {
+                camera.position.set(0, 10.5, 0.01);
+                controls.target.set(0, 0, 0);
+                controls.update();
+            });
+
+            // Right Panel Tabs
+            const tabMath = document.getElementById('tab-math');
+            const tabGuide = document.getElementById('tab-guide');
+            const contentMath = document.getElementById('content-math');
+            const contentGuide = document.getElementById('content-guide');
+
+            tabMath.addEventListener('click', () => {
+                tabMath.className = 'py-3 text-indigo-400 border-b-2 border-indigo-500 bg-indigo-500/5 transition';
+                tabGuide.className = 'py-3 text-slate-400 hover:text-slate-200 transition';
+                contentMath.classList.remove('hidden');
+                contentGuide.classList.add('hidden');
+            });
+
+            tabGuide.addEventListener('click', () => {
+                tabGuide.className = 'py-3 text-indigo-400 border-b-2 border-indigo-500 bg-indigo-500/5 transition';
+                tabMath.className = 'py-3 text-slate-400 hover:text-slate-200 transition';
+                contentGuide.classList.remove('hidden');
+                contentMath.classList.add('hidden');
+            });
+
+            // Mobile Drawer Toggle
+            const leftPanel = document.getElementById('left-panel');
+            document.getElementById('btn-toggle-panels').addEventListener('click', () => {
+                leftPanel.classList.toggle('-translate-x-[110%]');
+            });
+
+            // Responsive Resize Handler
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+
+            // Initial build & Render Loop
+            rebuildVisualization();
+
+            function animate() {
+                requestAnimationFrame(animate);
+                controls.update();
+                renderer.render(scene, camera);
+            }
+            animate();
+        };
+    </script>
+</body>
+</html>

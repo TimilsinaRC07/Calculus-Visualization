@@ -1,0 +1,1011 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Single Integral 3D Visualizer — Signed Area Under a Curve</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter & JetBrains Mono -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- Three.js & OrbitControls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <!-- KaTeX for crisp math rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js" onload="renderMathInElement(document.body);"></script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            overflow: hidden;
+            background-color: #0b0f19;
+            color: #f8fafc;
+        }
+        .font-mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        /* Custom scrollbar for control panels */
+        ::-webkit-scrollbar {
+            width: 5px;
+            height: 5px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.5);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(99, 102, 241, 0.4);
+            border-radius: 9999px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(99, 102, 241, 0.7);
+        }
+        /* Custom range slider styling */
+        input[type=range] {
+            -webkit-appearance: none;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 15px;
+            width: 15px;
+            border-radius: 50%;
+            background: #6366f1;
+            cursor: pointer;
+            margin-top: -5px;
+            box-shadow: 0 0 8px rgba(99, 102, 241, 0.8);
+            border: 2px solid #ffffff;
+            transition: transform 0.1s ease;
+        }
+        input[type=range]::-webkit-slider-thumb:hover {
+            transform: scale(1.15);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 5px;
+            cursor: pointer;
+            background: #334155;
+            border-radius: 9999px;
+        }
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.84);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border: 1px solid rgba(148, 163, 184, 0.16);
+        }
+    </style>
+</head>
+<body class="w-screen h-screen relative select-none">
+
+    <!-- 3D Canvas Container -->
+    <div id="canvas-container" class="w-full h-full absolute inset-0 z-0"></div>
+
+    <!-- Top Header Bar -->
+    <header class="absolute top-3 left-3 right-3 z-20 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
+        <div class="glass-panel px-4 py-2.5 rounded-2xl shadow-xl pointer-events-auto flex items-center gap-3">
+            <div class="w-9 h-9 rounded-xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-400 font-bold text-xl">
+                ∫
+            </div>
+            <div>
+                <h1 class="text-sm sm:text-base font-bold tracking-tight text-white">Geometric Meaning of the Definite Integral</h1>
+                <p class="text-[11px] text-slate-400 hidden sm:block">Signed Area $A = \int_a^b f(x)\,dx$ approximated by Riemann strips</p>
+            </div>
+        </div>
+
+        <!-- Camera & Quick View Controls -->
+        <div class="glass-panel px-3 py-2 rounded-2xl shadow-xl pointer-events-auto flex items-center gap-1.5 text-xs">
+            <button id="btn-front-view" class="px-2.5 py-1.5 rounded-xl bg-indigo-600/90 hover:bg-indigo-500 text-white font-medium border border-indigo-400/30 transition" title="2D Textbook Front View (XY Plane)">
+                Front (2D $xy$)
+            </button>
+            <button id="btn-iso-view" class="px-2.5 py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-200 border border-slate-700 transition" title="3D Isometric Perspective">
+                3D Iso
+            </button>
+            <button id="btn-reset-cam" class="px-2.5 py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-200 border border-slate-700 transition flex items-center gap-1.5" title="Reset Camera">
+                <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                <span class="hidden sm:inline">Reset</span>
+            </button>
+            <button id="btn-toggle-panels" class="lg:hidden px-2.5 py-1.5 rounded-xl bg-slate-700 hover:bg-slate-600 text-white font-medium transition">
+                Controls
+            </button>
+        </div>
+    </header>
+
+    <!-- Left Controls Panel -->
+    <aside id="left-panel" class="absolute top-20 left-3 bottom-3 w-[310px] sm:w-[330px] max-w-[calc(100vw-1.5rem)] z-10 glass-panel rounded-2xl shadow-2xl flex flex-col overflow-hidden transition-transform duration-300">
+        <div class="px-4 py-3 border-b border-slate-700/60 flex items-center justify-between">
+            <span class="text-xs font-semibold uppercase tracking-wider text-indigo-400">Parameters & Controls</span>
+            <span class="text-[11px] font-mono bg-indigo-500/15 text-indigo-300 px-2 py-0.5 rounded-lg border border-indigo-500/30">y = f(x)</span>
+        </div>
+
+        <div class="p-4 overflow-y-auto space-y-4 text-xs flex-1">
+            <!-- Curve Function Selector -->
+            <div>
+                <label class="block text-slate-300 font-medium mb-1.5">Curve Function $y = f(x)$</label>
+                <select id="func-select" class="w-full bg-slate-800/90 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-indigo-500 transition">
+                    <option value="parabola">Parabola: 0.25x² + 1.0</option>
+                    <option value="sinePos">Shifted Sine: 1.6 sin(x) + 2.2</option>
+                    <option value="signedSine">Signed Sine: 2.5 sin(x) (+ & − Area)</option>
+                    <option value="gaussian">Gaussian Bell: 3.5 exp(−0.35x²)</option>
+                    <option value="cubic">Cubic Wave: 0.16x³ − 0.9x + 1.5</option>
+                </select>
+            </div>
+
+            <!-- Subdivisions n & Approximation Rule -->
+            <div class="bg-slate-800/40 p-3 rounded-xl border border-slate-700/50 space-y-3">
+                <div class="flex items-center justify-between">
+                    <span class="font-semibold text-slate-200">Riemann Subdivisions ($n$)</span>
+                    <button id="btn-refine-anim" class="text-[11px] px-2 py-0.5 rounded-lg bg-indigo-600/80 hover:bg-indigo-500 text-white transition">
+                        Animate $n \to 60$
+                    </button>
+                </div>
+
+                <div>
+                    <div class="flex justify-between mb-1">
+                        <label for="slider-n" class="text-slate-300">Number of Strips ($n$)</label>
+                        <span id="val-n" class="font-mono font-semibold text-indigo-400">8</span>
+                    </div>
+                    <input type="range" id="slider-n" min="2" max="60" value="8" class="w-full">
+                </div>
+
+                <div>
+                    <label class="block text-slate-300 mb-1">Approximation Rule</label>
+                    <div class="grid grid-cols-2 gap-1.5 bg-slate-900/70 p-1 rounded-xl border border-slate-700/60">
+                        <button data-rule="midpoint" class="rule-btn py-1.5 rounded-lg font-medium bg-indigo-600 text-white transition">Midpoint</button>
+                        <button data-rule="left" class="rule-btn py-1.5 rounded-lg font-medium text-slate-400 hover:text-white transition">Left Endpoint</button>
+                        <button data-rule="right" class="rule-btn py-1.5 rounded-lg font-medium text-slate-400 hover:text-white transition">Right Endpoint</button>
+                        <button data-rule="trapezoid" class="rule-btn py-1.5 rounded-lg font-medium text-slate-400 hover:text-white transition">Trapezoidal</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Interval Bounds [a, b] -->
+            <div class="bg-slate-800/40 p-3 rounded-xl border border-slate-700/50 space-y-2.5">
+                <div class="flex items-center justify-between">
+                    <span class="font-semibold text-slate-200">Interval Bounds $[a, b]$</span>
+                    <span id="interval-dims" class="font-mono text-[11px] text-emerald-400">[-2.0, 3.0]</span>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <div class="flex justify-between text-[11px] mb-0.5">
+                            <span class="text-slate-400">Lower Limit $a$</span>
+                            <span id="val-a" class="font-mono text-slate-200">-2.0</span>
+                        </div>
+                        <input type="range" id="slider-a" min="-4.0" max="1.0" step="0.25" value="-2.0" class="w-full">
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-[11px] mb-0.5">
+                            <span class="text-slate-400">Upper Limit $b$</span>
+                            <span id="val-b" class="font-mono text-slate-200">3.0</span>
+                        </div>
+                        <input type="range" id="slider-b" min="-1.0" max="4.0" step="0.25" value="3.0" class="w-full">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Highlighted Area Element dA -->
+            <div class="bg-amber-500/10 p-3 rounded-xl border border-amber-500/30 space-y-2">
+                <div class="flex items-center justify-between">
+                    <span class="font-semibold text-amber-300 flex items-center gap-1.5">
+                        <span class="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block"></span>
+                        Area Element $dA$
+                    </span>
+                    <div class="flex items-center gap-1">
+                        <button id="btn-prev-i" class="px-1.5 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/40 text-amber-200 font-mono">◀</button>
+                        <span id="highlight-idx" class="font-mono text-[11px] text-amber-200 px-1">i = 4</span>
+                        <button id="btn-next-i" class="px-1.5 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/40 text-amber-200 font-mono">▶</button>
+                    </div>
+                </div>
+
+                <div>
+                    <input type="range" id="slider-hi" min="1" max="8" value="4" class="w-full">
+                </div>
+
+                <div id="highlight-readout" class="text-[11px] font-mono text-amber-200/90 pt-1 border-t border-amber-500/20 flex justify-between">
+                    <span>f(x*) = 1.15</span>
+                    <span>dA = 0.720</span>
+                </div>
+            </div>
+
+            <!-- Visibility Toggles -->
+            <div class="space-y-2">
+                <span class="block font-semibold text-slate-300">Visual Layers</span>
+                <div class="grid grid-cols-2 gap-2">
+                    <label class="flex items-center gap-2 bg-slate-800/60 px-2.5 py-2 rounded-xl border border-slate-700/60 cursor-pointer hover:bg-slate-800">
+                        <input type="checkbox" id="toggle-rects" checked class="accent-indigo-500 w-3.5 h-3.5 rounded">
+                        <span class="text-slate-200">Riemann Strips</span>
+                    </label>
+                    <label class="flex items-center gap-2 bg-slate-800/60 px-2.5 py-2 rounded-xl border border-slate-700/60 cursor-pointer hover:bg-slate-800">
+                        <input type="checkbox" id="toggle-exact" checked class="accent-indigo-500 w-3.5 h-3.5 rounded">
+                        <span class="text-slate-200">Exact Area Slab</span>
+                    </label>
+                    <label class="flex items-center gap-2 bg-slate-800/60 px-2.5 py-2 rounded-xl border border-slate-700/60 cursor-pointer hover:bg-slate-800">
+                        <input type="checkbox" id="toggle-grid" checked class="accent-indigo-500 w-3.5 h-3.5 rounded">
+                        <span class="text-slate-200">Axes & Grid</span>
+                    </label>
+                    <label class="flex items-center gap-2 bg-slate-800/60 px-2.5 py-2 rounded-xl border border-slate-700/60 cursor-pointer hover:bg-slate-800">
+                        <input type="checkbox" id="toggle-highlight" checked class="accent-amber-500 w-3.5 h-3.5 rounded">
+                        <span class="text-amber-300">Highlight $dA$</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Right Mathematical Breakdown & Step-by-Step Guide Panel -->
+    <aside id="right-panel" class="hidden lg:flex absolute top-20 right-3 bottom-3 w-[345px] z-10 glass-panel rounded-2xl shadow-2xl flex-col overflow-hidden">
+        <!-- Tabs -->
+        <div class="grid grid-cols-2 border-b border-slate-700/60 text-xs font-semibold">
+            <button id="tab-math" class="py-3 text-indigo-400 border-b-2 border-indigo-500 bg-indigo-500/5 transition">
+                Live Calculation
+            </button>
+            <button id="tab-guide" class="py-3 text-slate-400 hover:text-slate-200 transition">
+                Step-by-Step Concept
+            </button>
+        </div>
+
+        <!-- Tab 1: Live Mathematical Breakdown -->
+        <div id="content-math" class="p-4 overflow-y-auto space-y-4 text-xs flex-1">
+            <!-- Formula Card -->
+            <div class="bg-slate-900/80 p-3.5 rounded-xl border border-indigo-500/30 text-center">
+                <div class="text-[11px] uppercase tracking-wider text-indigo-400 font-semibold mb-1.5">Definite Integral & Riemann Sum</div>
+                <div class="text-sm text-slate-100 py-1">
+                    $$\int_a^b f(x)\,dx \approx \sum_{i=1}^{n} f(x_i^*) \, \Delta x$$
+                </div>
+            </div>
+
+            <!-- Subinterval Width & Count -->
+            <div class="grid grid-cols-3 gap-2">
+                <div class="bg-slate-800/60 p-2.5 rounded-xl border border-slate-700/60">
+                    <div class="text-[10px] text-slate-400">Span ($b - a$)</div>
+                    <div id="stat-span" class="font-mono font-semibold text-sm text-emerald-400 mt-0.5">5.000</div>
+                </div>
+                <div class="bg-slate-800/60 p-2.5 rounded-xl border border-slate-700/60">
+                    <div class="text-[10px] text-slate-400">Strips ($n$)</div>
+                    <div id="stat-n" class="font-mono font-semibold text-sm text-indigo-400 mt-0.5">8</div>
+                </div>
+                <div class="bg-slate-800/60 p-2.5 rounded-xl border border-slate-700/60">
+                    <div class="text-[10px] text-slate-400">Width ($\Delta x$)</div>
+                    <div id="stat-dx" class="font-mono font-semibold text-sm text-sky-400 mt-0.5">0.625</div>
+                </div>
+            </div>
+
+            <!-- Signed Area Breakdown -->
+            <div class="space-y-2.5 bg-slate-800/40 p-3.5 rounded-xl border border-slate-700/60">
+                <div class="flex justify-between items-center pb-2 border-b border-slate-700/60">
+                    <span class="text-slate-300">Riemann Approx ($A_n$)</span>
+                    <span id="stat-riemann" class="font-mono font-bold text-base text-indigo-400">0.0000</span>
+                </div>
+                <div class="flex justify-between items-center pb-2 border-b border-slate-700/60">
+                    <span class="text-slate-300">Exact Net Area $\int_a^b f(x)\,dx$</span>
+                    <span id="stat-exact" class="font-mono font-bold text-base text-emerald-400">0.0000</span>
+                </div>
+                <div class="grid grid-cols-2 gap-2 py-1 text-[11px] border-b border-slate-700/60">
+                    <div class="flex justify-between">
+                        <span class="text-sky-400">Positive ($+$):</span>
+                        <span id="stat-pos-area" class="font-mono text-sky-300">0.000</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-rose-400">Negative ($-$):</span>
+                        <span id="stat-neg-area" class="font-mono text-rose-300">0.000</span>
+                    </div>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-slate-400">Approximation Error</span>
+                    <span id="stat-error" class="font-mono font-medium text-amber-300">0.0000</span>
+                </div>
+
+                <!-- Convergence Visual Bar -->
+                <div class="pt-1">
+                    <div class="flex justify-between text-[10px] text-slate-400 mb-1">
+                        <span>Accuracy Convergence</span>
+                        <span id="stat-accuracy">98.5%</span>
+                    </div>
+                    <div class="w-full h-2 bg-slate-900 rounded-full overflow-hidden">
+                        <div id="accuracy-bar" class="h-full bg-gradient-to-r from-indigo-500 to-emerald-400 transition-all duration-200" style="width: 95%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Highlighted Strip Breakdown -->
+            <div class="bg-amber-500/10 p-3.5 rounded-xl border border-amber-500/30 space-y-1.5">
+                <div class="font-semibold text-amber-300 flex items-center justify-between">
+                    <span>Single Area Element ($dA$)</span>
+                    <span class="font-mono text-[11px] bg-amber-500/20 px-1.5 py-0.5 rounded">Gold Strip</span>
+                </div>
+                <p class="text-[11px] text-slate-300 leading-relaxed">
+                    The highlighted strip has width <span class="font-mono text-sky-300">$\Delta x$</span> on the $x$-axis and signed height <span class="font-mono text-amber-300">$y = f(x_i^*)$</span>:
+                </p>
+                <div id="da-formula-box" class="font-mono text-[11px] bg-slate-950/60 p-2 rounded-lg text-amber-200 border border-amber-500/20">
+                    dA = f(0.19) · 0.625 = 0.647
+                </div>
+            </div>
+
+            <!-- Interactive Mouse Hint -->
+            <div class="text-[11px] text-slate-400 bg-slate-900/50 p-2.5 rounded-xl border border-slate-800 flex items-center gap-2">
+                <span class="text-indigo-400 text-base">🖱️</span>
+                <span>Drag to orbit • Switch to <b>Front (2D xy)</b> for textbook view • Try <b>Signed Sine</b> to see negative area below $y=0$.</span>
+            </div>
+        </div>
+
+        <!-- Tab 2: Step-by-Step Geometric Explanation -->
+        <div id="content-guide" class="hidden p-4 overflow-y-auto space-y-3 text-xs flex-1">
+            <div class="bg-slate-800/50 p-3 rounded-xl border border-slate-700/60 space-y-1.5">
+                <div class="flex items-center gap-2 font-semibold text-emerald-400">
+                    <span class="w-5 h-5 rounded-full bg-emerald-500/20 flex items-center justify-center text-[11px]">1</span>
+                    <span>Partitioning $[a, b]$ into Width $\Delta x$</span>
+                </div>
+                <p class="text-slate-300 leading-relaxed">
+                    We divide the closed interval $[a, b]$ on the $x$-axis into $n$ equal subintervals $[x_{i-1}, x_i]$, each of uniform width:
+                </p>
+                <div class="bg-slate-900/70 p-2 rounded-lg text-center text-emerald-300">
+                    $$\Delta x = \frac{b - a}{n} \;\longrightarrow\; dx$$
+                </div>
+            </div>
+
+            <div class="bg-slate-800/50 p-3 rounded-xl border border-slate-700/60 space-y-1.5">
+                <div class="flex items-center gap-2 font-semibold text-amber-400">
+                    <span class="w-5 h-5 rounded-full bg-amber-500/20 flex items-center justify-center text-[11px]">2</span>
+                    <span>Area Element $dA = f(x)\,dx$</span>
+                </div>
+                <p class="text-slate-300 leading-relaxed">
+                    At a sample point $x_i^* \in [x_{i-1}, x_i]$, we erect a thin rectangular strip (shown in <span class="text-amber-300 font-semibold">gold</span>) of height $f(x_i^*)$ and width $\Delta x$:
+                </p>
+                <div class="bg-slate-900/70 p-2 rounded-lg text-center text-amber-300">
+                    $$\Delta A_i = f(x_i^*)\,\Delta x \;\longrightarrow\; dA = f(x)\,dx$$
+                </div>
+            </div>
+
+            <div class="bg-slate-800/50 p-3 rounded-xl border border-slate-700/60 space-y-1.5">
+                <div class="flex items-center gap-2 font-semibold text-sky-400">
+                    <span class="w-5 h-5 rounded-full bg-sky-500/20 flex items-center justify-center text-[11px]">3</span>
+                    <span>Signed Area ($+$ Above, $-$ Below)</span>
+                </div>
+                <p class="text-slate-300 leading-relaxed">
+                    Where $f(x) > 0$, strips rise above the $x$-axis (<span class="text-sky-400 font-medium">cyan</span>, positive area). Where $f(x) < 0$, strips extend below the $x$-axis (<span class="text-rose-400 font-medium">rose</span>, negative signed area).
+                </p>
+            </div>
+
+            <div class="bg-slate-800/50 p-3 rounded-xl border border-slate-700/60 space-y-1.5">
+                <div class="flex items-center gap-2 font-semibold text-indigo-400">
+                    <span class="w-5 h-5 rounded-full bg-indigo-500/20 flex items-center justify-center text-[11px]">4</span>
+                    <span>Limit as $n \to \infty$ ($\Delta x \to 0$)</span>
+                </div>
+                <p class="text-slate-300 leading-relaxed">
+                    Summing all $n$ strips and taking the limit as $n \to \infty$ eliminates the stair-step error, yielding the exact definite integral:
+                </p>
+                <div class="bg-slate-900/70 p-2 rounded-lg text-center text-indigo-300">
+                    $$\int_a^b f(x)\,dx = \lim_{n \to \infty} \sum_{i=1}^{n} f(x_i^*)\,\Delta x$$
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Bottom Legend Pill -->
+    <div class="hidden sm:flex fixed bottom-3 left-1/2 -translate-x-1/2 z-10 glass-panel px-4 py-1.5 rounded-full text-[11px] text-slate-300 items-center gap-4 shadow-lg pointer-events-none">
+        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-indigo-400 inline-block"></span> Curve $y = f(x)$</span>
+        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-sky-400 inline-block"></span> Positive Area ($f > 0$)</span>
+        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-rose-400 inline-block"></span> Negative Area ($f < 0$)</span>
+        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-amber-400 inline-block"></span> Element $dA = f(x)\,dx$</span>
+    </div>
+
+    <script>
+        /**
+         * Single Integral 3D Visualizer
+         * Coordinate mapping:
+         * Math x -> Three.js X
+         * Math y -> Three.js Y (vertical axis)
+         * Extrusion thickness -> Three.js Z (centered around z = 0)
+         */
+        window.onload = function () {
+            // --- 1. Application State ---
+            const state = {
+                funcKey: 'parabola',
+                n: 8,
+                rule: 'midpoint', // 'midpoint' | 'left' | 'right' | 'trapezoid'
+                a: -2.0,
+                b: 3.0,
+                highlightI: 4, // 1-indexed
+                showRects: true,
+                showExact: true,
+                showGrid: true,
+                showHighlight: true,
+                animatingRefine: false
+            };
+
+            // Calculus curve presets
+            const functions = {
+                parabola: {
+                    label: '0.25x² + 1.0',
+                    fn: (x) => 0.25 * x * x + 1.0
+                },
+                sinePos: {
+                    label: '1.6 sin(x) + 2.2',
+                    fn: (x) => 1.6 * Math.sin(x) + 2.2
+                },
+                signedSine: {
+                    label: '2.5 sin(x)',
+                    fn: (x) => 2.5 * Math.sin(x)
+                },
+                gaussian: {
+                    label: '3.5 exp(−0.35x²)',
+                    fn: (x) => 3.5 * Math.exp(-0.35 * x * x)
+                },
+                cubic: {
+                    label: '0.16x³ − 0.9x + 1.5',
+                    fn: (x) => 0.16 * x * x * x - 0.9 * x + 1.5
+                }
+            };
+
+            // --- 2. Three.js Scene Setup ---
+            const container = document.getElementById('canvas-container');
+            const scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0b0f19);
+            scene.fog = new THREE.FogExp2(0x0b0f19, 0.025);
+
+            const camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.1, 100);
+            const isoCamPos = new THREE.Vector3(3.6, 3.2, 8.8);
+            const frontCamPos = new THREE.Vector3(0.5, 1.5, 9.8);
+            camera.position.copy(isoCamPos);
+
+            const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            container.appendChild(renderer.domElement);
+
+            const controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.06;
+            controls.target.set(0.5, 1.4, 0);
+            controls.maxDistance = 24;
+            controls.minDistance = 3;
+
+            // --- 3. Lighting ---
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.68);
+            scene.add(ambientLight);
+
+            const dirLight1 = new THREE.DirectionalLight(0xffffff, 0.85);
+            dirLight1.position.set(6, 10, 12);
+            scene.add(dirLight1);
+
+            const dirLight2 = new THREE.DirectionalLight(0x818cf8, 0.45);
+            dirLight2.position.set(-8, -4, -10);
+            scene.add(dirLight2);
+
+            // --- 4. XY Coordinate Plane, Grid & Axes ---
+            const axesGroup = new THREE.Group();
+            scene.add(axesGroup);
+
+            function buildAxesAndGrid() {
+                // Vertical XY grid (rotated GridHelper to lie in XY plane)
+                const xyGrid = new THREE.GridHelper(10, 10, 0x334155, 0x1e293b);
+                xyGrid.rotation.x = Math.PI / 2;
+                xyGrid.position.z = -0.28; // Slightly behind the 3D slab so there is zero z-fighting
+                axesGroup.add(xyGrid);
+
+                // Subtle horizontal ground reference plane at y = 0
+                const xzGrid = new THREE.GridHelper(10, 10, 0x1e293b, 0x111827);
+                axesGroup.add(xzGrid);
+
+                const createAxis = (start, end, color) => {
+                    const mat = new THREE.LineBasicMaterial({ color });
+                    const geom = new THREE.BufferGeometry().setFromPoints([start, end]);
+                    axesGroup.add(new THREE.Line(geom, mat));
+
+                    const dir = new THREE.Vector3().subVectors(end, start).normalize();
+                    const coneGeom = new THREE.ConeGeometry(0.075, 0.22, 16);
+                    const coneMat = new THREE.MeshBasicMaterial({ color });
+                    const cone = new THREE.Mesh(coneGeom, coneMat);
+                    cone.position.copy(end);
+                    cone.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+                    axesGroup.add(cone);
+                };
+
+                // X-axis (horizontal)
+                createAxis(new THREE.Vector3(-4.8, 0, 0), new THREE.Vector3(4.8, 0, 0), 0x34d399);
+                // Y-axis (vertical)
+                createAxis(new THREE.Vector3(0, -3.8, 0), new THREE.Vector3(0, 4.5, 0), 0x38bdf8);
+
+                // Integer tick marks along X and Y axes
+                const tickMat = new THREE.LineBasicMaterial({ color: 0x64748b });
+                for (let t = -4; t <= 4; t++) {
+                    if (t === 0) continue;
+                    const xTick = new THREE.BufferGeometry().setFromPoints([
+                        new THREE.Vector3(t, -0.08, 0),
+                        new THREE.Vector3(t, 0.08, 0)
+                    ]);
+                    axesGroup.add(new THREE.Line(xTick, tickMat));
+
+                    if (t >= -3 && t <= 4) {
+                        const yTick = new THREE.BufferGeometry().setFromPoints([
+                            new THREE.Vector3(-0.08, t, 0),
+                            new THREE.Vector3(0.08, t, 0)
+                        ]);
+                        axesGroup.add(new THREE.Line(yTick, tickMat));
+                    }
+                }
+
+                // Axis Labels
+                const makeLabel = (text, color, pos, scale = 0.6) => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 128;
+                    canvas.height = 128;
+                    const ctx = canvas.getContext('2d');
+                    ctx.font = 'bold 64px Inter, sans-serif';
+                    ctx.fillStyle = color;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(text, 64, 64);
+
+                    const tex = new THREE.CanvasTexture(canvas);
+                    const spriteMat = new THREE.SpriteMaterial({ map: tex, transparent: true });
+                    const sprite = new THREE.Sprite(spriteMat);
+                    sprite.position.copy(pos);
+                    sprite.scale.set(scale, scale, scale);
+                    axesGroup.add(sprite);
+                };
+
+                makeLabel('x', '#34d399', new THREE.Vector3(5.1, 0, 0));
+                makeLabel('y', '#38bdf8', new THREE.Vector3(0, 4.8, 0));
+            }
+            buildAxesAndGrid();
+
+            // Dynamic Geometry Group
+            const dynamicGroup = new THREE.Group();
+            scene.add(dynamicGroup);
+
+            // --- 5. High-Precision Numerical Integration (Composite Simpson's Rule) ---
+            function computeExactIntegrals(fn, a, b) {
+                if (Math.abs(b - a) < 1e-6) return { net: 0, pos: 0, neg: 0 };
+                const N = 400; // Even subdivisions
+                const h = (b - a) / N;
+                let netSum = 0;
+                let posSum = 0;
+                let negSum = 0;
+
+                for (let i = 0; i <= N; i++) {
+                    const w = (i === 0 || i === N) ? 1 : (i % 2 === 1 ? 4 : 2);
+                    const x = a + i * h;
+                    const y = fn(x);
+                    netSum += w * y;
+                    if (y >= 0) posSum += w * y;
+                    else negSum += w * y;
+                }
+                return {
+                    net: (h / 3) * netSum,
+                    pos: (h / 3) * posSum,
+                    neg: (h / 3) * negSum
+                };
+            }
+
+            // Helper: Create extruded 3D trapezoid prism for Trapezoidal Rule
+            function createTrapezoidGeometry(x0, x1, y0, y1, depth) {
+                const shape = new THREE.Shape();
+                shape.moveTo(x0, 0);
+                shape.lineTo(x1, 0);
+                shape.lineTo(x1, y1);
+                shape.lineTo(x0, y0);
+                shape.closePath();
+
+                const geom = new THREE.ExtrudeGeometry(shape, {
+                    depth: depth,
+                    bevelEnabled: false
+                });
+                geom.translate(0, 0, -depth / 2);
+                return geom;
+            }
+
+            // --- 6. Build & Update 3D Visualization ---
+            function rebuildVisualization() {
+                // Dispose previous geometries & materials cleanly
+                while (dynamicGroup.children.length > 0) {
+                    const child = dynamicGroup.children[0];
+                    if (child.geometry) child.geometry.dispose();
+                    if (child.material) {
+                        if (Array.isArray(child.material)) child.material.forEach(m => m.dispose());
+                        else child.material.dispose();
+                    }
+                    dynamicGroup.remove(child);
+                }
+
+                axesGroup.visible = state.showGrid;
+
+                const { funcKey, n, rule, a, b } = state;
+                const fn = functions[funcKey].fn;
+
+                // Clamp highlight index
+                state.highlightI = Math.min(Math.max(1, state.highlightI), n);
+
+                const span = b - a;
+                const dx = span / n;
+                const slabDepth = 0.42; // 3D thickness of extruded area & strips
+
+                // A. Highlighted Interval Segment [a, b] on the x-axis
+                if (Math.abs(span) > 0.01) {
+                    const intervalGeom = new THREE.BoxGeometry(Math.abs(span), 0.05, slabDepth + 0.12);
+                    const intervalMat = new THREE.MeshBasicMaterial({ color: 0x10b981 });
+                    const intervalMesh = new THREE.Mesh(intervalGeom, intervalMat);
+                    intervalMesh.position.set((a + b) / 2, 0, 0);
+                    dynamicGroup.add(intervalMesh);
+                }
+
+                // B. Smooth Continuous Curve y = f(x) across extended domain [-4.4, 4.4]
+                const curvePts = [];
+                const xMinPlot = Math.min(-4.3, a - 0.4);
+                const xMaxPlot = Math.max(4.3, b + 0.4);
+                const plotSamples = 180;
+                for (let k = 0; k <= plotSamples; k++) {
+                    const px = xMinPlot + (k / plotSamples) * (xMaxPlot - xMinPlot);
+                    const py = fn(px);
+                    curvePts.push(new THREE.Vector3(px, py, 0));
+                }
+                const curveGeom = new THREE.BufferGeometry().setFromPoints(curvePts);
+                const curveMat = new THREE.LineBasicMaterial({ color: 0xa5b4fc, linewidth: 2 });
+                dynamicGroup.add(new THREE.Line(curveGeom, curveMat));
+
+                // Highlighted thick curve arc directly over [a, b]
+                if (Math.abs(span) > 0.01) {
+                    const activePts = [];
+                    const activeSamples = 100;
+                    for (let k = 0; k <= activeSamples; k++) {
+                        const px = a + (k / activeSamples) * span;
+                        activePts.push(new THREE.Vector3(px, fn(px), 0));
+                    }
+                    const tubeCurve = new THREE.CatmullRomCurve3(activePts);
+                    const tubeGeom = new THREE.TubeGeometry(tubeCurve, 80, 0.035, 8, false);
+                    const tubeMat = new THREE.MeshBasicMaterial({ color: 0x818cf8 });
+                    dynamicGroup.add(new THREE.Mesh(tubeGeom, tubeMat));
+                }
+
+                // C. Exact Shaded Area 3D Extruded Slab between [a, b] and y = 0
+                if (state.showExact && Math.abs(span) > 0.01) {
+                    const exactShape = new THREE.Shape();
+                    exactShape.moveTo(a, 0);
+                    const steps = 120;
+                    for (let k = 0; k <= steps; k++) {
+                        const px = a + (k / steps) * span;
+                        exactShape.lineTo(px, fn(px));
+                    }
+                    exactShape.lineTo(b, 0);
+                    exactShape.closePath();
+
+                    const exactGeom = new THREE.ExtrudeGeometry(exactShape, {
+                        depth: slabDepth * 0.65,
+                        bevelEnabled: false
+                    });
+                    exactGeom.translate(0, 0, -(slabDepth * 0.65) / 2);
+
+                    const exactMat = new THREE.MeshPhongMaterial({
+                        color: 0x6366f1,
+                        transparent: true,
+                        opacity: state.showRects ? 0.28 : 0.72,
+                        side: THREE.DoubleSide,
+                        shininess: 60
+                    });
+                    dynamicGroup.add(new THREE.Mesh(exactGeom, exactMat));
+                }
+
+                // D. Riemann Rectangles / Trapezoids & Highlighted Element dA
+                let riemannSum = 0;
+                let highlightInfo = { xStar: 0, h: 0, dA: 0 };
+
+                const unitBoxGeom = new THREE.BoxGeometry(1, 1, 1);
+                const boxEdgesGeom = new THREE.EdgesGeometry(unitBoxGeom);
+
+                const posMat = new THREE.MeshPhongMaterial({
+                    color: 0x38bdf8,
+                    transparent: true,
+                    opacity: 0.68,
+                    shininess: 60
+                });
+                const posEdgeMat = new THREE.LineBasicMaterial({ color: 0x7dd3fc, transparent: true, opacity: 0.65 });
+
+                const negMat = new THREE.MeshPhongMaterial({
+                    color: 0xf43f5e,
+                    transparent: true,
+                    opacity: 0.68,
+                    shininess: 60
+                });
+                const negEdgeMat = new THREE.LineBasicMaterial({ color: 0xfda4af, transparent: true, opacity: 0.65 });
+
+                const hlMat = new THREE.MeshPhongMaterial({
+                    color: 0xf59e0b,
+                    emissive: 0xb45309,
+                    emissiveIntensity: 0.4,
+                    transparent: true,
+                    opacity: 0.94,
+                    shininess: 95
+                });
+                const hlEdgeMat = new THREE.LineBasicMaterial({ color: 0xfef08a });
+
+                if (Math.abs(span) > 0.01) {
+                    for (let i = 0; i < n; i++) {
+                        const x0 = a + i * dx;
+                        const x1 = x0 + dx;
+                        const xMid = (x0 + x1) / 2;
+
+                        let xStar = xMid;
+                        let height = 0;
+
+                        if (rule === 'left') {
+                            xStar = x0;
+                            height = fn(x0);
+                        } else if (rule === 'right') {
+                            xStar = x1;
+                            height = fn(x1);
+                        } else if (rule === 'midpoint') {
+                            xStar = xMid;
+                            height = fn(xMid);
+                        } else if (rule === 'trapezoid') {
+                            xStar = xMid;
+                            height = 0.5 * (fn(x0) + fn(x1));
+                        }
+
+                        const stripArea = height * dx;
+                        riemannSum += stripArea;
+
+                        const isHighlighted = (i + 1 === state.highlightI);
+                        if (isHighlighted) {
+                            highlightInfo = { xStar, h: height, dA: stripArea };
+                        }
+
+                        const shouldDraw = (state.showRects && !isHighlighted) || (isHighlighted && state.showHighlight);
+                        if (shouldDraw) {
+                            const shrink = isHighlighted ? 0.985 : 0.95;
+                            const isPositive = height >= 0;
+                            const mat = isHighlighted ? hlMat : (isPositive ? posMat : negMat);
+                            const edgeMat = isHighlighted ? hlEdgeMat : (isPositive ? posEdgeMat : negEdgeMat);
+
+                            if (rule === 'trapezoid') {
+                                const y0 = fn(x0);
+                                const y1 = fn(x1);
+                                const trapGeom = createTrapezoidGeometry(
+                                    x0 + dx * (1 - shrink) * 0.5,
+                                    x1 - dx * (1 - shrink) * 0.5,
+                                    y0,
+                                    y1,
+                                    isHighlighted ? slabDepth * 1.12 : slabDepth
+                                );
+                                const mesh = new THREE.Mesh(trapGeom, mat);
+                                dynamicGroup.add(mesh);
+
+                                const edges = new THREE.EdgesGeometry(trapGeom);
+                                dynamicGroup.add(new THREE.LineSegments(edges, edgeMat));
+                            } else {
+                                const absH = Math.max(0.015, Math.abs(height));
+                                const mesh = new THREE.Mesh(unitBoxGeom, mat);
+                                mesh.scale.set(
+                                    Math.abs(dx) * shrink,
+                                    absH,
+                                    isHighlighted ? slabDepth * 1.12 : slabDepth
+                                );
+                                mesh.position.set(xMid, height / 2, 0);
+                                dynamicGroup.add(mesh);
+
+                                const wire = new THREE.LineSegments(boxEdgesGeom, edgeMat);
+                                wire.scale.copy(mesh.scale);
+                                wire.position.copy(mesh.position);
+                                dynamicGroup.add(wire);
+                            }
+                        }
+
+                        // Sample point marker sphere on the curve for the highlighted strip
+                        if (isHighlighted && state.showHighlight) {
+                            const dotGeom = new THREE.SphereGeometry(0.075, 16, 16);
+                            const dotMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+                            const dot = new THREE.Mesh(dotGeom, dotMat);
+                            const sampleY = rule === 'trapezoid' ? height : fn(xStar);
+                            dot.position.set(xStar, sampleY, (slabDepth * 1.12) / 2 + 0.02);
+                            dynamicGroup.add(dot);
+                        }
+                    }
+                }
+
+                // --- 7. Update UI Readouts ---
+                const exactStats = computeExactIntegrals(fn, a, b);
+                const absError = Math.abs(exactStats.net - riemannSum);
+                const denom = Math.max(0.0001, Math.abs(exactStats.net));
+                const relErrorPct = (absError / denom) * 100;
+                const accuracyPct = Math.max(0, Math.min(100, 100 - relErrorPct));
+
+                document.getElementById('stat-span').textContent = span.toFixed(3);
+                document.getElementById('stat-n').textContent = n.toString();
+                document.getElementById('stat-dx').textContent = dx.toFixed(3);
+                document.getElementById('stat-riemann').textContent = riemannSum.toFixed(4);
+                document.getElementById('stat-exact').textContent = exactStats.net.toFixed(4);
+                document.getElementById('stat-pos-area').textContent = `+${exactStats.pos.toFixed(3)}`;
+                document.getElementById('stat-neg-area').textContent = `${exactStats.neg.toFixed(3)}`;
+                document.getElementById('stat-error').textContent = absError.toFixed(4);
+                document.getElementById('stat-accuracy').textContent = `${accuracyPct.toFixed(1)}%`;
+                document.getElementById('accuracy-bar').style.width = `${accuracyPct}%`;
+
+                document.getElementById('highlight-idx').textContent = `i = ${state.highlightI}`;
+                document.getElementById('highlight-readout').innerHTML =
+                    `<span>f(${highlightInfo.xStar.toFixed(2)}) = ${highlightInfo.h.toFixed(2)}</span>` +
+                    `<span>dA = ${highlightInfo.dA.toFixed(3)}</span>`;
+                document.getElementById('da-formula-box').textContent =
+                    `dA = f(${highlightInfo.xStar.toFixed(2)}) · ${dx.toFixed(3)} = ${highlightInfo.dA.toFixed(4)}`;
+            }
+
+            // --- 8. UI Event Listeners ---
+            const funcSelect = document.getElementById('func-select');
+            const sliderN = document.getElementById('slider-n');
+            const sliderA = document.getElementById('slider-a');
+            const sliderB = document.getElementById('slider-b');
+            const sliderHi = document.getElementById('slider-hi');
+
+            funcSelect.addEventListener('change', (e) => {
+                state.funcKey = e.target.value;
+                rebuildVisualization();
+            });
+
+            function syncSubdivisionUI() {
+                document.getElementById('val-n').textContent = state.n;
+                sliderHi.max = state.n;
+                if (state.highlightI > state.n) state.highlightI = state.n;
+                sliderHi.value = state.highlightI;
+            }
+
+            sliderN.addEventListener('input', (e) => {
+                state.n = parseInt(e.target.value, 10);
+                syncSubdivisionUI();
+                rebuildVisualization();
+            });
+
+            sliderHi.addEventListener('input', (e) => {
+                state.highlightI = parseInt(e.target.value, 10);
+                rebuildVisualization();
+            });
+
+            document.getElementById('btn-prev-i').addEventListener('click', () => {
+                state.highlightI = state.highlightI > 1 ? state.highlightI - 1 : state.n;
+                sliderHi.value = state.highlightI;
+                rebuildVisualization();
+            });
+
+            document.getElementById('btn-next-i').addEventListener('click', () => {
+                state.highlightI = state.highlightI < state.n ? state.highlightI + 1 : 1;
+                sliderHi.value = state.highlightI;
+                rebuildVisualization();
+            });
+
+            // Rule selector buttons
+            document.querySelectorAll('.rule-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.rule-btn').forEach(b => {
+                        b.classList.remove('bg-indigo-600', 'text-white');
+                        b.classList.add('text-slate-400');
+                    });
+                    btn.classList.add('bg-indigo-600', 'text-white');
+                    btn.classList.remove('text-slate-400');
+                    state.rule = btn.dataset.rule;
+                    rebuildVisualization();
+                });
+            });
+
+            // Interval bounds sliders
+            function updateBounds() {
+                let aVal = parseFloat(sliderA.value);
+                let bVal = parseFloat(sliderB.value);
+                if (aVal >= bVal) {
+                    bVal = Math.min(4.0, aVal + 0.5);
+                    sliderB.value = bVal;
+                }
+                state.a = aVal;
+                state.b = bVal;
+
+                document.getElementById('val-a').textContent = state.a.toFixed(2);
+                document.getElementById('val-b').textContent = state.b.toFixed(2);
+                document.getElementById('interval-dims').textContent = `[${state.a.toFixed(2)}, ${state.b.toFixed(2)}]`;
+                rebuildVisualization();
+            }
+            sliderA.addEventListener('input', updateBounds);
+            sliderB.addEventListener('input', updateBounds);
+
+            // Visibility toggles
+            document.getElementById('toggle-rects').addEventListener('change', (e) => {
+                state.showRects = e.target.checked;
+                rebuildVisualization();
+            });
+            document.getElementById('toggle-exact').addEventListener('change', (e) => {
+                state.showExact = e.target.checked;
+                rebuildVisualization();
+            });
+            document.getElementById('toggle-grid').addEventListener('change', (e) => {
+                state.showGrid = e.target.checked;
+                rebuildVisualization();
+            });
+            document.getElementById('toggle-highlight').addEventListener('change', (e) => {
+                state.showHighlight = e.target.checked;
+                rebuildVisualization();
+            });
+
+            // Animate n -> 60 convergence button
+            document.getElementById('btn-refine-anim').addEventListener('click', () => {
+                if (state.animatingRefine) return;
+                state.animatingRefine = true;
+                state.n = 2;
+                sliderN.value = 2;
+                syncSubdivisionUI();
+                rebuildVisualization();
+
+                const interval = setInterval(() => {
+                    if (state.n >= 60) {
+                        clearInterval(interval);
+                        state.animatingRefine = false;
+                        return;
+                    }
+                    state.n = Math.min(60, state.n + 1);
+                    sliderN.value = state.n;
+                    syncSubdivisionUI();
+                    rebuildVisualization();
+                }, 45);
+            });
+
+            // Camera Preset Buttons
+            document.getElementById('btn-front-view').addEventListener('click', () => {
+                camera.position.copy(frontCamPos);
+                controls.target.set(0.5, 1.4, 0);
+                controls.update();
+            });
+
+            document.getElementById('btn-iso-view').addEventListener('click', () => {
+                camera.position.copy(isoCamPos);
+                controls.target.set(0.5, 1.4, 0);
+                controls.update();
+            });
+
+            document.getElementById('btn-reset-cam').addEventListener('click', () => {
+                camera.position.copy(isoCamPos);
+                controls.target.set(0.5, 1.4, 0);
+                controls.update();
+            });
+
+            // Right Panel Tabs
+            const tabMath = document.getElementById('tab-math');
+            const tabGuide = document.getElementById('tab-guide');
+            const contentMath = document.getElementById('content-math');
+            const contentGuide = document.getElementById('content-guide');
+
+            tabMath.addEventListener('click', () => {
+                tabMath.className = 'py-3 text-indigo-400 border-b-2 border-indigo-500 bg-indigo-500/5 transition';
+                tabGuide.className = 'py-3 text-slate-400 hover:text-slate-200 transition';
+                contentMath.classList.remove('hidden');
+                contentGuide.classList.add('hidden');
+            });
+
+            tabGuide.addEventListener('click', () => {
+                tabGuide.className = 'py-3 text-indigo-400 border-b-2 border-indigo-500 bg-indigo-500/5 transition';
+                tabMath.className = 'py-3 text-slate-400 hover:text-slate-200 transition';
+                contentGuide.classList.remove('hidden');
+                contentMath.classList.add('hidden');
+            });
+
+            // Mobile Drawer Toggle
+            const leftPanel = document.getElementById('left-panel');
+            document.getElementById('btn-toggle-panels').addEventListener('click', () => {
+                leftPanel.classList.toggle('-translate-x-[110%]');
+            });
+
+            // Responsive Resize Handler
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+
+            // Initial build & Render Loop
+            rebuildVisualization();
+
+            function animate() {
+                requestAnimationFrame(animate);
+                controls.update();
+                renderer.render(scene, camera);
+            }
+            animate();
+        };
+    </script>
+</body>
+</html>
